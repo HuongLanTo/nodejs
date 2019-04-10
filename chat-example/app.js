@@ -15,11 +15,25 @@ mongoose.connect('mongodb://localhost/chat-example', function(err) {
 	}
 });
 
+var chatSchema = mongoose.Schema({
+	nick: String,
+	msg: String,
+	created: {type: Date, default: Date.now}
+});
+
+var Chat = mongoose.model('Message', chatSchema);
+
 app.get('/', function(req, res) {
 	res.sendfile(__dirname + '/index.html')
 });
 
 io.sockets.on('connection', function(socket) {
+	var query = Chat.find({});
+	query.exec(function(err, docs) {
+		if (err) throw err;
+		socket.emit('load old msgs', docs);
+	});
+
 	socket.on('new user', function(data, callback) {
 		if (data in users) {
 			callback(false);
@@ -53,7 +67,12 @@ io.sockets.on('connection', function(socket) {
 				callback('Error! Please enter a message for your whisper.');
 			}
 		} else {
-			io.sockets.emit('new message', {msg: msg, nick: socket.nickname});
+			var newMsg = new Chat({msg: msg, nick: socket.nickname});
+			newMsg.save(function(err) {
+				if (err) throw err;
+				io.sockets.emit('new message', {msg: msg, nick: socket.nickname});
+			});
+			
 		}
 	});
 
